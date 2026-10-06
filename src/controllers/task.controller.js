@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { createNotification, notifyMany } = require('../utils/notify');
 
 const VALID_STATUSES = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'];
 
@@ -125,6 +126,19 @@ exports.createTask = async (req, res, next) => {
         project: { select: { id: true, name: true } },
       },
     });
+
+    // Notify the assignee (don't notify yourself)
+    if (assigneeId && assigneeId !== userId) {
+      await createNotification({
+        userId: assigneeId,
+        type: 'TASK_ASSIGNED',
+        title: 'New task assigned',
+        message: `You were assigned "${task.title}"`,
+        linkType: 'task',
+        linkId: task.id,
+      });
+    }
+    
 
     res.status(201).json({
       success: true,
@@ -404,6 +418,21 @@ exports.updateTaskStatus = async (req, res, next) => {
       },
     });
 
+        // Notify the creator and assignee — except whoever made the change
+    const recipients = [];
+    if (task.createdBy && task.createdBy !== userId) recipients.push(task.createdBy);
+    if (task.assignedTo && task.assignedTo !== userId) recipients.push(task.assignedTo);
+
+    if (recipients.length > 0) {
+      await notifyMany(recipients, {
+        type: 'STATUS_CHANGED',
+        title: 'Task status changed',
+        message: `"${updated.title}" is now ${updated.status}`,
+        linkType: 'task',
+        linkId: updated.id,
+      });
+    }
+
     res.json(withPriorityLevel(updated));
   } catch (err) {
     next(err);
@@ -443,3 +472,7 @@ exports.deleteTask = async (req, res, next) => {
     next(err);
   }
 };
+
+
+
+

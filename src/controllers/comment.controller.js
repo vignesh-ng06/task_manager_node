@@ -39,6 +39,21 @@ exports.createComment = async (req, res, next) => {
       },
     });
 
+        // Notify: the assignee and the task creator — except the commenter
+    const recipients = [];
+    if (task.assignedTo && task.assignedTo !== userId) recipients.push(task.assignedTo);
+    if (task.createdBy && task.createdBy !== userId) recipients.push(task.createdBy);
+
+    if (recipients.length > 0) {
+      await notifyMany(recipients, {
+        type: 'COMMENT_ADDED',
+        title: 'New comment on a task',
+        message: `New comment on "${task.title}"`,
+        linkType: 'task',
+        linkId: task.id,
+      });
+    }
+
     res.status(201).json(comment);
   } catch (err) {
     next(err);

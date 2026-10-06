@@ -88,8 +88,12 @@ model Notification {
   id        Int      @id @default(autoincrement())
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String                          // TASK_ASSIGNED | COMMENT_ADDED | STATUS_CHANGED
   title     String
   message   String
+  linkType  String?                         // "task" | "project"
+  linkId    Int?                            // the id of the linked entity
   isRead    Boolean  @default(false)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 }

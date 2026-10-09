@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { notifyMany } = require('../utils/notify');
 
 const findTaskInCompany = (taskId, companyId) =>
   prisma.task.findFirst({

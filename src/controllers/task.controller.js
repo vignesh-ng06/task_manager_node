@@ -189,6 +189,13 @@ exports.getAllTasks = async (req, res, next) => {
       where.projectId = Number(req.query.projectId);
     }
 
+    if (req.query.search && req.query.search.trim().length > 0) {
+      where.title = {
+        contains: req.query.search.trim(),
+        mode: 'insensitive',
+      };
+    }
+
     const [tasks, total] = await Promise.all([
       prisma.task.findMany({
         where,
@@ -220,16 +227,45 @@ exports.getMyTasks = async (req, res, next) => {
   try {
     const { id: userId, companyId } = req.user;
 
+    const where = {
+      assignedTo: userId,
+      isActive: true,
+      project: { companyId },
+    };
+
+    if (req.query.status) {
+      if (!VALID_STATUSES.includes(req.query.status)) {
+        return res.status(400).json({ error: 'Invalid status filter' });
+      }
+      where.status = req.query.status;
+    }
+
+    if (req.query.priority) {
+      const normalized = normalizePriority(req.query.priority);
+      if (!normalized) {
+        return res.status(400).json({ error: 'Invalid priority filter' });
+      }
+      where.priority = normalized;
+    }
+
+    if (req.query.projectId) {
+      where.projectId = Number(req.query.projectId);
+    }
+
+    if (req.query.search && req.query.search.trim().length > 0) {
+      where.title = {
+        contains: req.query.search.trim(),
+        mode: 'insensitive',
+      };
+    }
+
     const tasks = await prisma.task.findMany({
-      where: {
-        assignedTo: userId,
-        isActive: true,
-        project: { companyId },
-      },
+      where,
       orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }],
       include: {
         project: { select: { id: true, name: true } },
         creator: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
       },
     });
 

@@ -7,10 +7,10 @@ const PORT = process.env.PORT || 5000;
 
 
 //middleware
-// app.use((req, res, next) => {
-//   console.log(`${req.method} ${req.url}`);
-//   next();
-// });
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
 
 
 // app.post("/api/users", (req, res) => {

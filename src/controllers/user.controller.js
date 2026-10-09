@@ -76,8 +76,9 @@ exports.getAllUsers = async (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const skip = (page - 1) * limit;
+    const isActive = req.query.status === 'inactive' ? false : true;
 
-    const where = { companyId };
+    const where = { companyId, isActive };
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({

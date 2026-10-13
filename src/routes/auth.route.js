@@ -10,4 +10,6 @@ router.post('/login', authController.login);
 // Protected
 router.get('/me', authMiddleware, authController.me);
 
+router.patch('/update/me', authMiddleware, authController.updateMe);
+
 module.exports = router;

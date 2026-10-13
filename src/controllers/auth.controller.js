@@ -193,3 +193,68 @@ exports.me = async (req, res, next) => {
     next(err);
   }
 };
+
+// ─────────────────────────────────────────────
+// PATCH /auth/me  (protected)
+// body: { name?, currentPassword?, newPassword? }
+// ─────────────────────────────────────────────
+exports.updateMe = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { name, currentPassword, newPassword } = req.body;
+
+    const data = {};
+
+    if (name !== undefined) {
+      if (name !== null && typeof name !== 'string') {
+        return res.status(400).json({ error: 'Name must be a string' });
+      }
+      data.name = name ? name.trim() : null;
+    }
+
+    // Password change requires current password verification
+    if (newPassword !== undefined && newPassword !== null && newPassword !== '') {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Current password is required' });
+      }
+      if (typeof newPassword !== 'string' || newPassword.length < 6) {
+        return res
+          .status(400)
+          .json({ error: 'New password must be at least 6 characters' });
+      }
+
+      const me = await prisma.user.findUnique({ where: { id: userId } });
+      if (!me) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const ok = await bcrypt.compare(currentPassword, me.password);
+      if (!ok) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      data.password = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        companyId: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+};

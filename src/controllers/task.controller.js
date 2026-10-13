@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { createNotification, notifyMany } = require('../utils/notify');
+const { logActivity } = require('../utils/activity');
 
 const VALID_STATUSES = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'];
 
@@ -125,6 +126,13 @@ exports.createTask = async (req, res, next) => {
         assignee: { select: { id: true, name: true, email: true } },
         project: { select: { id: true, name: true } },
       },
+    });
+
+    await logActivity({
+      taskId: task.id,
+      userId,
+      type: 'CREATED',
+      message: `created this task`,
     });
 
     // Notify the assignee (don't notify yourself)
@@ -297,6 +305,12 @@ exports.getTask = async (req, res, next) => {
           orderBy: { createdAt: 'asc' },
           include: { user: { select: { id: true, name: true, email: true } } },
         },
+        activities: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
       },
     });
 
@@ -398,6 +412,36 @@ exports.updateTask = async (req, res, next) => {
       },
     });
 
+    // Log each meaningful field change
+    const changes = [];
+    if (data.title !== undefined && data.title !== existing.title) {
+      changes.push(`renamed to "${data.title}"`);
+    }
+    if (data.priority !== undefined && data.priority !== existing.priority) {
+      changes.push(`changed priority from ${existing.priority} to ${data.priority}`);
+    }
+    if (data.assignedTo !== undefined && data.assignedTo !== existing.assignedTo) {
+      const label = data.assignedTo === null ? 'unassigned' : `reassigned`;
+      changes.push(label);
+    }
+    if (data.dueDate !== undefined) {
+      changes.push(
+        data.dueDate === null ? 'removed the due date' : 'updated the due date'
+      );
+    }
+    if (data.description !== undefined && data.description !== existing.description) {
+      changes.push('updated the description');
+    }
+
+    for (const c of changes) {
+      await logActivity({
+        taskId: id,
+        userId: req.user.id,
+        type: 'UPDATED',
+        message: c,
+      });
+    }
+
     res.json(withPriorityLevel({
       success: true,
       message: 'Task updated successfully',
@@ -452,6 +496,13 @@ exports.updateTaskStatus = async (req, res, next) => {
         assignee: { select: { id: true, name: true, email: true } },
         project: { select: { id: true, name: true } },
       },
+    });
+
+    await logActivity({
+      taskId: id,
+      userId,
+      type: 'STATUS_CHANGED',
+      message: `changed status from ${task.status} to ${status}`,
     });
 
         // Notify the creator and assignee — except whoever made the change
@@ -510,5 +561,38 @@ exports.deleteTask = async (req, res, next) => {
 };
 
 
+
+
+
+exports.getTaskActivities = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { companyId } = req.user;
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid task id' });
+    }
+
+    const task = await prisma.task.findFirst({
+      where: { id, project: { companyId } },
+      select: { id: true },
+    });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const activities = await prisma.taskActivity.findMany({
+      where: { taskId: id },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    res.json({ data: activities });
+  } catch (err) {
+    next(err);
+  }
+};
 
 

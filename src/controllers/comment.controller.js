@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { notifyMany } = require('../utils/notify');
+const { logActivity } = require('../utils/activity');
 
 const findTaskInCompany = (taskId, companyId) =>
   prisma.task.findFirst({
@@ -38,6 +39,13 @@ exports.createComment = async (req, res, next) => {
       include: {
         user: { select: { id: true, name: true, email: true, role: true } },
       },
+    });
+
+    await logActivity({
+      taskId,
+      userId,
+      type: 'COMMENTED',
+      message: 'added a comment',
     });
 
         // Notify: the assignee and the task creator — except the commenter

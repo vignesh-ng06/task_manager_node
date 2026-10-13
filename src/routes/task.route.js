@@ -21,4 +21,7 @@ router.patch('/updateTaskStatus/:id/status', taskController.updateTaskStatus);
 router.get('/getAllTasks', taskController.getAllTasks);
 router.get('/:id', taskController.getTask);
 
+// Activities log
+router.get('/:id/activities', taskController.getTaskActivities);
+
 module.exports = router;

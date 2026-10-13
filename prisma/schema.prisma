@@ -36,6 +36,7 @@ model User {
   tasksAssigned   Task[]         @relation("TaskAssignee")
   tasksCreated    Task[]         @relation("TaskCreator")
   comments        Comment[]
+  activities TaskActivity[]
   notifications   Notification[]
 }
 
@@ -68,6 +69,7 @@ model Task {
   creator     User      @relation("TaskCreator", fields: [createdBy], references: [id])
   dueDate     DateTime?
   comments    Comment[]
+  activities TaskActivity[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -96,4 +98,18 @@ model Notification {
   isRead    Boolean  @default(false)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model TaskActivity {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // CREATED | STATUS_CHANGED | ASSIGNED | PRIORITY_CHANGED | UPDATED | COMMENTED | DELETED
+  message   String   // human-readable
+  metadata  Json?    // optional structured data
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
 }

@@ -8,13 +8,14 @@ datasource db {
 }
 
 model Company {
-  id        Int      @id @default(autoincrement())
-  name      String
-  industry  String?
-  logoUrl   String?
-  website   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String
+  industry    String?
+  logoUrl     String?
+  website     String?
+  companySize String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   users    User[]
   projects Project[]

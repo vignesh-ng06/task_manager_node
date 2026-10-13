@@ -22,7 +22,7 @@ const signToken = (user) =>
 // ─────────────────────────────────────────────
 // POST /auth/register
 // Creates a Company + an admin User (transaction)
-// body: { email, password, name?, companyName, industry?, website?, logoUrl? }
+// body: { email, password, name?, companyName, industry?, website?, logoUrl?, companySize? }
 // ─────────────────────────────────────────────
 exports.register = async (req, res, next) => {
   try {
@@ -34,6 +34,7 @@ exports.register = async (req, res, next) => {
       industry,
       website,
       logoUrl,
+      companySize,
     } = req.body;
 
     if (!email || !isValidEmail(email)) {
@@ -46,6 +47,13 @@ exports.register = async (req, res, next) => {
       return res
         .status(400)
         .json({ error: 'companyName is required (min 2 chars)' });
+    }
+    if (
+      companySize !== undefined &&
+      companySize !== null &&
+      typeof companySize !== 'string'
+    ) {
+      return res.status(400).json({ error: 'companySize must be a string' });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -66,6 +74,7 @@ exports.register = async (req, res, next) => {
           industry: industry?.trim() || null,
           website: website?.trim() || null,
           logoUrl: logoUrl?.trim() || null,
+          companySize: companySize?.trim() || null,
         },
       });
 
@@ -99,6 +108,7 @@ exports.register = async (req, res, next) => {
         industry: result.company.industry,
         website: result.company.website,
         logoUrl: result.company.logoUrl,
+        companySize: result.company.companySize,
       },
     });
   } catch (err) {
@@ -122,7 +132,14 @@ exports.login = async (req, res, next) => {
       where: { email: email.toLowerCase().trim() },
       include: {
         company: {
-          select: { id: true, name: true, industry: true, logoUrl: true },
+          select: {
+            id: true,
+            name: true,
+            industry: true,
+            website: true,
+            logoUrl: true,
+            companySize: true,
+          },
         },
       },
     });
@@ -179,6 +196,7 @@ exports.me = async (req, res, next) => {
             industry: true,
             website: true,
             logoUrl: true,
+            companySize: true,
           },
         },
       },
@@ -254,6 +272,72 @@ exports.updateMe = async (req, res, next) => {
     });
 
     res.json(user);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /auth/company (admin only)
+// body: { name?, industry?, website?, logoUrl?, companySize? }
+exports.updateCompany = async (req, res, next) => {
+  try {
+    const body = req.body;
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({ error: 'Request body must be an object' });
+    }
+
+    const allowedFields = ['name', 'industry', 'website', 'logoUrl', 'companySize'];
+    const fields = Object.keys(body);
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Provide at least one company field to update' });
+    }
+
+    const unsupportedFields = fields.filter((field) => !allowedFields.includes(field));
+    if (unsupportedFields.length > 0) {
+      return res.status(400).json({
+        error: `Unsupported field(s): ${unsupportedFields.join(', ')}`,
+      });
+    }
+
+    const data = {};
+
+    for (const field of fields) {
+      const value = body[field];
+
+      if (field === 'name') {
+        if (typeof value !== 'string' || value.trim().length < 2) {
+          return res.status(400).json({
+            error: 'Company name must be at least 2 characters',
+          });
+        }
+        data.name = value.trim();
+      } else {
+        if (value !== null && typeof value !== 'string') {
+          return res.status(400).json({
+            error: `${field} must be a string or null`,
+          });
+        }
+        data[field] = typeof value === 'string' ? value.trim() || null : null;
+      }
+    }
+
+    const company = await prisma.company.update({
+      where: { id: req.user.companyId },
+      data,
+      select: {
+        id: true,
+        name: true,
+        industry: true,
+        website: true,
+        logoUrl: true,
+        companySize: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json({ company });
   } catch (err) {
     next(err);
   }

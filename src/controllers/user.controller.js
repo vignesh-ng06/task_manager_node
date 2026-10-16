@@ -93,15 +93,36 @@ exports.getAllUsers = async (req, res, next) => {
           role: true,
           isActive: true,
           createdAt: true,
+          projectMemberships: {
+            include:{
+              project: {
+                select: { id: true, name: true, isActive: true },
+              },
+            },
+          },
         },
       }),
       prisma.user.count({ where }),
     ]);
 
+    // Shape: attach projects[] and projectCount, filtering inactive projects
+    const shaped = users.map((u) => {
+      const activeProjects = u.projectMemberships
+        .filter((pm) => pm.project.isActive)
+        .map((pm) => ({ id: pm.project.id, name: pm.project.name }));
+
+      const { projectMemberships, ...rest } = u;
+      return {
+        ...rest,
+        projects: activeProjects,
+        projectCount: activeProjects.length,
+      };
+    });
+
     res.json({
       success: true,
       message: 'Users retrieved successfully',
-      data: users,
+      data: shaped,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
@@ -129,9 +150,9 @@ exports.getUser = async (req, res, next) => {
         email: true,
         name: true,
         role: true,
+        isActive: true,
         createdAt: true,
         updatedAt: true,
-        isActive: true,
         projectsCreated: {
           select: { id: true, name: true, createdAt: true },
         },
@@ -144,6 +165,11 @@ exports.getUser = async (req, res, next) => {
             dueDate: true,
           },
         },
+        projectMemberships: {
+          include: {
+            project: { select: { id: true, name: true, isActive: true } },
+          },
+        },
       },
     });
 
@@ -151,11 +177,25 @@ exports.getUser = async (req, res, next) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    const activeProjects = user.projectMemberships
+      .filter((pm) => pm.project.isActive)
+      .map((pm) => ({ id: pm.project.id, name: pm.project.name }));
+
+    const { projectMemberships, ...rest } = user;
+
+    res.json({
+      success: true,
+      data: {
+        ...rest,
+        projects: activeProjects,
+        projectCount: activeProjects.length,
+      },
+    });
   } catch (err) {
     next(err);
   }
 };
+
 
 // ─────────────────────────────────────────────
 // PUT /users/:id   (admin only)

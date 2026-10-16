@@ -17,4 +17,9 @@ router.delete('/delete/:id', allowRoles('admin'), projectController.deleteProjec
 router.get('/getAll', projectController.getAllProjects);
 router.get('/getById/:id', projectController.getProject);
 
+
+//project membership routes
+router.post('/:id/members', allowRoles('admin', 'manager'), projectController.addMembers);
+router.delete('/:id/members/:userId', allowRoles('admin', 'manager'), projectController.removeMember);
+
 module.exports = router;

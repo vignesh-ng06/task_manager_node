@@ -57,6 +57,23 @@ const findProjectInCompany = (projectId, companyId) =>
 const findUserInCompany = (userId, companyId) =>
   prisma.user.findFirst({ where: { id: userId, companyId, isActive: true } });
 
+
+
+// Helper near the top of the file
+const isProjectMember = async (projectId, userId) => {
+  const count = await prisma.projectMember.count({
+    where: { projectId, userId },
+  });
+  return count > 0;
+};
+
+const projectHasMembers = async (projectId) => {
+  const count = await prisma.projectMember.count({
+    where: { projectId },
+  });
+  return count > 0;
+};
+
 // ─────────────────────────────────────────────
 // POST /tasks   (admin + manager)
 // body: { title, description?, projectId, assignedTo?, priority? (1|2|3), dueDate? }
@@ -93,12 +110,22 @@ exports.createTask = async (req, res, next) => {
       if (Number.isNaN(aId)) {
         return res.status(400).json({ error: 'Invalid assignedTo' });
       }
+
       const assignee = await findUserInCompany(aId, companyId);
       if (!assignee) {
         return res.status(400).json({
           error: 'Assignee must be an active user in your company',
         });
       }
+
+      // If the project has members, the assignee must be one of them
+      const hasMembers = await projectHasMembers(pId);
+      if (hasMembers && !(await isProjectMember(pId, aId))) {
+        return res.status(400).json({
+          error: 'Assignee must be a member of this project',
+        });
+      }
+
       assigneeId = aId;
     }
 
@@ -383,19 +410,29 @@ exports.updateTask = async (req, res, next) => {
       }
     }
 
-    if (assignedTo !== undefined) {
-      if (assignedTo === null) {
-        data.assignedTo = null;
-      } else {
-        const aId = Number(assignedTo);
-        const assignee = await findUserInCompany(aId, companyId);
-        if (!assignee) {
-          return res.status(400).json({
-            error: 'Assignee must be an active user in your company',
-          });
-        }
-        data.assignedTo = aId;
+    let assigneeId = null;
+    if (assignedTo !== undefined && assignedTo !== null) {
+      const aId = Number(assignedTo);
+      if (Number.isNaN(aId)) {
+        return res.status(400).json({ error: 'Invalid assignedTo' });
       }
+
+      const assignee = await findUserInCompany(aId, companyId);
+      if (!assignee) {
+        return res.status(400).json({
+          error: 'Assignee must be an active user in your company',
+        });
+      }
+
+      // If the project has members, the assignee must be one of them
+      const hasMembers = await projectHasMembers(pId);
+      if (hasMembers && !(await isProjectMember(pId, aId))) {
+        return res.status(400).json({
+          error: 'Assignee must be a member of this project',
+        });
+      }
+
+      assigneeId = aId;
     }
 
     if (Object.keys(data).length === 0) {

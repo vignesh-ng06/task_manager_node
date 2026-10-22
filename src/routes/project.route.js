@@ -12,6 +12,7 @@ router.put('/update/:id', allowRoles('admin', 'manager'), projectController.upda
 
 // Admin only
 router.delete('/delete/:id', allowRoles('admin'), projectController.deleteProject);
+router.patch('/activate/:id', allowRoles('admin'), projectController.activateProject);
 
 // Any authenticated role
 router.get('/getAll', projectController.getAllProjects);

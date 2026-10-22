@@ -187,19 +187,32 @@ exports.createTask = async (req, res, next) => {
 
 // ─────────────────────────────────────────────
 // GET /tasks
-// filters: status, priority (1|2|3), assignedTo, projectId, includeInactive
+// filters: status, priority (1|2|3), assignedTo, projectId, inactive
 // ─────────────────────────────────────────────
 exports.getAllTasks = async (req, res, next) => {
   try {
-    const { companyId } = req.user;
+    const { id: userId, role, companyId } = req.user;
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const skip = (page - 1) * limit;
 
+    // `inactive=true` returns only inactive tasks. Keep the previous parameter
+    // names as aliases so existing clients continue to work with this behavior.
+    const inactiveOnly =
+      req.query.inactive === 'true' ||
+      req.query.includeInactive === 'true' ||
+      req.query.iincludeInactive === 'true';
+
     const where = {
       project: { companyId },
-      ...(req.query.includeInactive === 'true' ? {} : { isActive: true }),
+      isActive: !inactiveOnly,
     };
+
+    // Admins and managers can view all tasks in their company. Regular users
+    // can only view tasks assigned to themselves, including inactive tasks.
+    if (role !== 'admin' && role !== 'manager') {
+      where.assignedTo = userId;
+    }
 
     if (req.query.status) {
       if (!VALID_STATUSES.includes(req.query.status)) {
@@ -216,7 +229,10 @@ exports.getAllTasks = async (req, res, next) => {
       where.priority = normalized;
     }
 
-    if (req.query.assignedTo) {
+    if (req.query.assignedTo && role !== 'admin' && role !== 'manager') {
+      // Do not allow a regular user to override their own task scope.
+      where.assignedTo = userId;
+    } else if (req.query.assignedTo) {
       where.assignedTo = Number(req.query.assignedTo);
     }
 
@@ -262,9 +278,14 @@ exports.getMyTasks = async (req, res, next) => {
   try {
     const { id: userId, companyId } = req.user;
 
+    const inactiveOnly =
+      req.query.inactive === 'true' ||
+      req.query.includeInactive === 'true' ||
+      req.query.iincludeInactive === 'true';
+
     const where = {
       assignedTo: userId,
-      isActive: true,
+      isActive: !inactiveOnly,
       project: { companyId },
     };
 
@@ -597,6 +618,39 @@ exports.deleteTask = async (req, res, next) => {
   }
 };
 
+exports.activateTask = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { companyId } = req.user;
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid task id' });
+    }
+
+    const existing = await prisma.task.findFirst({
+      where: { id, project: { companyId } },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (existing.isActive) {
+      return res.status(400).json({ error: 'Task is already active' });
+    }
+
+    const task = await prisma.task.update({
+      where: { id },
+      data: { isActive: true },
+      select: { id: true, title: true, isActive: true },
+    });
+
+    res.json({ message: 'Task activated', task });
+  } catch (err) {
+    next(err);
+  }
+};
+
 
 
 
@@ -631,5 +685,3 @@ exports.getTaskActivities = async (req, res, next) => {
     next(err);
   }
 };
-
-

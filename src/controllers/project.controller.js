@@ -272,13 +272,59 @@ exports.deleteProject = async (req, res, next) => {
       return res.status(400).json({ error: 'Project is already inactive' });
     }
 
-    const project = await prisma.project.update({
-      where: { id },
-      data: { isActive: false },
-      select: { id: true, name: true, isActive: true },
+    // A project and all of its tasks must change state together.
+    const project = await prisma.$transaction(async (tx) => {
+      await tx.task.updateMany({
+        where: { projectId: id },
+        data: { isActive: false },
+      });
+
+      return tx.project.update({
+        where: { id },
+        data: { isActive: false },
+        select: { id: true, name: true, isActive: true },
+      });
     });
 
     res.json({ message: 'Project deactivated', project });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /projects/activate/:id   (admin only)  →  restore project and tasks
+exports.activateProject = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { companyId } = req.user;
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid project id' });
+    }
+
+    const existing = await prisma.project.findFirst({ where: { id, companyId } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (existing.isActive) {
+      return res.status(400).json({ error: 'Project is already active' });
+    }
+
+    // Restore the project and all tasks that belong to it atomically.
+    const project = await prisma.$transaction(async (tx) => {
+      await tx.task.updateMany({
+        where: { projectId: id },
+        data: { isActive: true },
+      });
+
+      return tx.project.update({
+        where: { id },
+        data: { isActive: true },
+        select: { id: true, name: true, isActive: true },
+      });
+    });
+
+    res.json({ message: 'Project activated', project });
   } catch (err) {
     next(err);
   }

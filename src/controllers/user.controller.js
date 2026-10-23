@@ -306,3 +306,35 @@ exports.deleteUser = async (req, res, next) => {
     next(err);
   }
 };
+
+// PATCH /users/activateUser/:id   (admin only)
+// Reactivates an inactive user in the admin's company
+exports.activateUser = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const companyId = req.user.companyId;
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const existing = await prisma.user.findFirst({ where: { id, companyId } });
+    if (!existing) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (existing.isActive) {
+      return res.status(400).json({ error: 'User is already active' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { isActive: true },
+      select: { id: true, email: true, name: true, role: true, isActive: true },
+    });
+
+    res.json({ success: true, message: 'User activated', user });
+  } catch (err) {
+    next(err);
+  }
+};

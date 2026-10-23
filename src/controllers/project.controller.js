@@ -136,8 +136,13 @@ exports.getProject = async (req, res, next) => {
       include: {
         creator: { select: { id: true, name: true, email: true } },
         members: {
+          where: {
+            user: {
+              isActive:true,
+            }
+          },
           include: {
-            user: { select: { id: true, name: true, email: true, role: true } },
+            user: { select: { id: true, name: true, email: true, role: true , isActive:true} },
           },
         },
         tasks: {

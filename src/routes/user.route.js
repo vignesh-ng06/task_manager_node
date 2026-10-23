@@ -11,6 +11,7 @@ router.use(authMiddleware);
 router.post('/createUser', allowRoles('admin'), userController.createUser);
 router.put('/updateUser/:id', allowRoles('admin'), userController.updateUser);
 router.delete('/deleteUser/:id', allowRoles('admin'), userController.deleteUser);
+router.patch('/activateUser/:id', allowRoles('admin'), userController.activateUser);
 
 // Admin + Manager
 router.get('/getAllUsers', allowRoles('admin', 'manager'), userController.getAllUsers);

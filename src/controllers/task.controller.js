@@ -277,6 +277,9 @@ exports.getAllTasks = async (req, res, next) => {
 exports.getMyTasks = async (req, res, next) => {
   try {
     const { id: userId, companyId } = req.user;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
 
     const inactiveOnly =
       req.query.inactive === 'true' ||
@@ -315,17 +318,25 @@ exports.getMyTasks = async (req, res, next) => {
       };
     }
 
-    const tasks = await prisma.task.findMany({
-      where,
-      orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }],
-      include: {
-        project: { select: { id: true, name: true } },
-        creator: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-      },
-    });
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }],
+        include: {
+          project: { select: { id: true, name: true } },
+          creator: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      prisma.task.count({ where }),
+    ]);
 
-    res.json({ data: withPriorityLevel(tasks) });
+    res.json({
+      data: withPriorityLevel(tasks),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (err) {
     next(err);
   }
